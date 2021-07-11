@@ -4,6 +4,7 @@ import time
 from logging.handlers import RotatingFileHandler
 
 import requests
+from requests.exceptions import RequestException
 import telegram
 from dotenv import load_dotenv
 
@@ -12,7 +13,7 @@ load_dotenv()
 PRAKTIKUM_TOKEN = os.getenv('PRAKTIKUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-
+API_URL = 'https://praktikum.yandex.ru/api/user_api/homework_statuses/'
 
 bot = telegram.Bot(token=TELEGRAM_TOKEN)
 
@@ -39,7 +40,7 @@ def get_stream_handler():
 
 def get_logger(name):
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     logger.addHandler(get_file_handler())
     logger.addHandler(get_stream_handler())
     return logger
@@ -49,20 +50,32 @@ logger = get_logger(__name__)
 
 
 def parse_homework_status(homework):
-    homework_name = homework['homework_name']
-    if homework['status'] == 'rejected':
+    homework_name = homework.get('homework_name')
+    homework_status = homework.get('status')
+    if homework_name is None or homework_status is None:
+        return 'API Яндекс.Практикум работает некорректно!'
+    if homework_status == 'rejected':
         verdict = 'К сожалению, в работе нашлись ошибки.'
-    else:
+    elif homework_status == 'approved':
         verdict = 'Ревьюеру всё понравилось, работа зачтена!'
+    else:
+        verdict = 'Ваша работа еще не проверена.'
     return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
 
 
 def get_homeworks(current_timestamp):
-    url = 'https://praktikum.yandex.ru/api/user_api/homework_statuses/'
-    headers = {'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'}
-    payload = {'from_date': current_timestamp}
-    homework_statuses = requests.get(
-        url, headers=headers, params=payload)
+    if current_timestamp is None:
+        current_timestamp = int(time.time())
+    try:
+        headers = {'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'}
+        payload = {'from_date': current_timestamp}
+        homework_statuses = requests.get(
+            API_URL, headers=headers, params=payload)
+        if homework_statuses.status_code != 200:
+            raise f'Код ошибки - {homework_statuses.status_code}'
+    except RequestException:
+        logger.exception()
+        return None
     return homework_statuses.json()
 
 

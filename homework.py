@@ -66,16 +66,16 @@ def parse_homework_status(homework):
 def get_homeworks(current_timestamp):
     if current_timestamp is None:
         current_timestamp = int(time.time())
+    headers = {'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'}
+    payload = {'from_date': current_timestamp}
     try:
-        headers = {'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'}
-        payload = {'from_date': current_timestamp}
         homework_statuses = requests.get(
             API_URL, headers=headers, params=payload)
         if homework_statuses.status_code != 200:
             raise f'Код ошибки - {homework_statuses.status_code}'
-    except RequestException:
+    except RequestException as e:
         logger.exception()
-        return None
+        raise f'Ошибка запроса - {e}'
     return homework_statuses.json()
 
 
